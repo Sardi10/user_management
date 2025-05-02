@@ -32,6 +32,8 @@ services:
 
   fastapi:
     build: .
+    env_file:
+      - .env
     volumes:
       - ./:/myapp/
     depends_on:
@@ -39,6 +41,8 @@ services:
         condition: service_healthy
     networks:
       - app-network
+    ports:
+      - "8000:8000"
 
   nginx:
     image: nginx:latest

@@ -1,60 +1,58 @@
-# Define a base stage with a Debian Bookworm base image that includes the latest glibc update
-FROM python:3.12-bookworm as base
+# --------- BUILD STAGE ---------
+    FROM python:3.12-bookworm AS base
 
-# Set environment variables
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONFAULTHANDLER=1 \
-    PIP_NO_CACHE_DIR=true \
-    PIP_DEFAULT_TIMEOUT=100 \
-    PIP_DISABLE_PIP_VERSION_CHECK=on \
-    QR_CODE_DIR=/myapp/qr_codes
-
-WORKDIR /myapp
-
-# Update system and specifically upgrade libc-bin to the required security patch version
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    libpq-dev \
-    && apt-get install -y libc-bin=2.36-9+deb12u7 \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Python dependencies in /.venv
-COPY requirements.txt .
-RUN python -m venv /.venv \
-    && . /.venv/bin/activate \
-    && pip install --upgrade pip \
-    && pip install -r requirements.txt
-
-# Define a second stage for the runtime, using the same Debian Bookworm slim image
-FROM python:3.12-slim-bookworm as final
-
-# Upgrade libc-bin in the final stage to ensure security patch is applied
-RUN apt-get update && apt-get install -y libc-bin=2.36-9+deb12u7 \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy the virtual environment from the base stage
-COPY --from=base /.venv /.venv
-
-# Set environment variable to ensure all python commands run inside the virtual environment
-ENV PATH="/.venv/bin:$PATH" \
-    PYTHONUNBUFFERED=1 \
-    PYTHONFAULTHANDLER=1 \
-    QR_CODE_DIR=/myapp/qr_codes
-
-# Set the working directory
-WORKDIR /myapp
-
-# Create and switch to a non-root user
-RUN useradd -m myuser
-USER myuser
-
-# Copy application code with appropriate ownership
-COPY --chown=myuser:myuser . .
-
-# Inform Docker that the container listens on the specified port at runtime.
-EXPOSE 8000
-
-# Use ENTRYPOINT to specify the executable when the container starts.
-ENTRYPOINT ["uvicorn", "app.main:app", "--reload", "--host", "0.0.0.0", "--port", "8000"]
+    # environment
+    ENV PYTHONUNBUFFERED=1 \
+        PYTHONFAULTHANDLER=1 \
+        PIP_NO_CACHE_DIR=true \
+        PIP_DEFAULT_TIMEOUT=100 \
+        PIP_DISABLE_PIP_VERSION_CHECK=on \
+        QR_CODE_DIR=/myapp/qr_codes
+    
+    WORKDIR /myapp
+    
+    # install system deps + patched libc-bin in one go
+    RUN apt-get update && \
+        apt-get install -y --no-install-recommends \
+          --allow-downgrades \
+          gcc \
+          libpq-dev \
+          libc-bin=2.36-9+deb12u7 && \
+        rm -rf /var/lib/apt/lists/*
+    
+    # create venv and install Python deps
+    COPY requirements.txt .
+    RUN python -m venv /.venv && \
+        /.venv/bin/pip install --upgrade pip && \
+        /.venv/bin/pip install -r requirements.txt
+    
+    # --------- RUNTIME STAGE ---------
+    FROM python:3.12-slim-bookworm AS final
+    
+    # apply same libc-bin patch
+    RUN apt-get update && \
+        apt-get install -y --allow-downgrades libc-bin=2.36-9+deb12u7 && \
+        rm -rf /var/lib/apt/lists/*
+    
+    # copy in the virtualenv
+    COPY --from=base /.venv /.venv
+    
+    # ensure venv is on PATH
+    ENV PATH="/.venv/bin:$PATH" \
+        PYTHONUNBUFFERED=1 \
+        PYTHONFAULTHANDLER=1 \
+        QR_CODE_DIR=/myapp/qr_codes
+    
+    WORKDIR /myapp
+    
+    # drop to non-root
+    RUN useradd -m myuser
+    USER myuser
+    
+    # copy application code
+    COPY --chown=myuser:myuser . .
+    
+    EXPOSE 8000
+    
+    ENTRYPOINT ["uvicorn", "app.main:app", "--reload", "--host", "0.0.0.0", "--port", "8000"]
+    
