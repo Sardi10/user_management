@@ -66,14 +66,30 @@ class UserService:
             logger.info(f"User Role: {new_user.role}")
             user_count = await cls.count(session)
             new_user.role = UserRole.ADMIN if user_count == 0 else UserRole.ANONYMOUS            
+            # if new_user.role == UserRole.ADMIN:
+            #     new_user.email_verified = True
+
+            # else:
+            #     new_user.verification_token = generate_verification_token()
+            #     await email_service.send_verification_email(new_user)
+
+            # session.add(new_user)
+            # await session.commit()
+            # return new_user
+                # 1) Stage the new user
+            session.add(new_user)
+
+    # 2) Flush so Postgres assigns new_user.id (UUID from server) immediately
+            await session.flush()
+
+    # Now new_user.id is a real UUID—build & send the email link
             if new_user.role == UserRole.ADMIN:
                 new_user.email_verified = True
-
             else:
                 new_user.verification_token = generate_verification_token()
-                await email_service.send_verification_email(new_user)
+            await email_service.send_verification_email(new_user)
 
-            session.add(new_user)
+    # 3) Persist everything (including the token) and commit
             await session.commit()
             return new_user
         except ValidationError as e:
