@@ -1,5 +1,7 @@
+import uuid
+from uuid import UUID
 from builtins import Exception, dict, str
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import Database
@@ -8,6 +10,9 @@ from app.services.email_service import EmailService
 from app.services.jwt_service import decode_token
 from settings.config import Settings
 from fastapi import Depends
+from app.models.user_model import User
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login/")
 
 def get_settings() -> Settings:
     """Return application settings."""
@@ -27,22 +32,31 @@ async def get_db() -> AsyncSession:
             raise HTTPException(status_code=500, detail=str(e))
         
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 
-def get_current_user(token: str = Depends(oauth2_scheme)):
-    credentials_exception = HTTPException(
-        status_code=401,
+
+async def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    credentials_exc = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
     payload = decode_token(token)
-    if payload is None:
-        raise credentials_exception
-    user_id: str = payload.get("sub")
-    user_role: str = payload.get("role")
-    if user_id is None or user_role is None:
-        raise credentials_exception
-    return {"user_id": user_id, "role": user_role}
+    if not payload or "sub" not in payload:
+        raise credentials_exc
+
+    try:
+        user_uuid = UUID(payload["sub"])   # ← now this will succeed
+    except ValueError:
+        raise credentials_exc
+
+    user = await db.get(User, user_uuid)
+    if not user:
+        raise credentials_exc
+
+    return user
 
 def require_role(role: str):
     def role_checker(current_user: dict = Depends(get_current_user)):
@@ -50,3 +64,32 @@ def require_role(role: str):
             raise HTTPException(status_code=403, detail="Operation not permitted")
         return current_user
     return role_checker
+
+async def require_user(
+    token: str        = Depends(oauth2_scheme),
+    db: AsyncSession  = Depends(get_db),
+) -> User:
+    """
+    Ensure the incoming request has a valid Bearer token
+    and return the full User model.
+    """
+    credentials_exc = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    payload = decode_token(token)
+    if not payload or "sub" not in payload:
+        raise credentials_exc
+
+    try:
+        user_id = uuid.UUID(payload["sub"])
+    except ValueError:
+        raise credentials_exc
+
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    return user
