@@ -81,3 +81,34 @@ class UserListResponse(BaseModel):
     total: int = Field(..., example=100)
     page: int = Field(..., example=1)
     size: int = Field(..., example=10)
+
+class UserProfileDTO(BaseModel):
+    id: UUID
+    email: EmailStr
+    nickname: Optional[str]
+    first_name: Optional[str]
+    last_name: Optional[str]
+    bio: Optional[str]
+    profile_picture_url: Optional[str]
+    linkedin_profile_url: Optional[str]
+    github_profile_url: Optional[str]
+    role: UserRole
+    is_professional: bool
+    professional_status_updated_at: Optional[datetime]
+
+    class Config:
+        from_attributes = True
+
+class UserProfileUpdate(BaseModel):
+    first_name: Optional[str]
+    last_name: Optional[str]
+    bio: Optional[str]
+    profile_picture_url: Optional[str]
+    linkedin_profile_url: Optional[str]
+    github_profile_url: Optional[str]
+
+    @root_validator(pre=True)
+    def at_least_one_field(cls, values):
+        if not any(values.values()):
+            raise ValueError("At least one field must be provided")
+        return values
