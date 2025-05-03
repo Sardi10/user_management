@@ -3,6 +3,7 @@ from pydantic import BaseModel, EmailStr, Field, validator, root_validator
 from typing import Optional, List
 from datetime import datetime
 from enum import Enum
+from uuid import UUID, uuid4
 import uuid
 import re
 from app.models.user_model import UserRole
@@ -81,3 +82,70 @@ class UserListResponse(BaseModel):
     total: int = Field(..., example=100)
     page: int = Field(..., example=1)
     size: int = Field(..., example=10)
+
+class UserProfileDTO(BaseModel):
+    id: UUID = Field(
+        ..., 
+        example="0923c31a-40d2-4e86-8b27-80542567acd8"
+    )
+    email: EmailStr = Field(
+        ..., 
+        example="john.doe@example.com"
+    )
+    nickname: Optional[str] = Field(
+        None, 
+        example="jolly_lion_664"
+    )
+    first_name: Optional[str] = Field(
+        None, 
+        example="John"
+    )
+    last_name: Optional[str] = Field(
+        None, 
+        example="Doe"
+    )
+    bio: Optional[str] = Field(
+        None,
+        example="Experienced software developer specializing in web applications."
+    )
+    profile_picture_url: Optional[str] = Field(
+        None,
+        example="https://example.com/profiles/john.jpg"
+    )
+    linkedin_profile_url: Optional[str] = Field(
+        None,
+        example="https://linkedin.com/in/johndoe"
+    )
+    github_profile_url: Optional[str] = Field(
+        None,
+        example="https://github.com/johndoe"
+    )
+    role: UserRole = Field(
+        ..., 
+        example="ANONYMOUS"
+    )
+    is_professional: bool = Field(
+        ..., 
+        example=False
+    )
+    professional_status_updated_at: Optional[datetime] = Field(
+        None, 
+        example=None
+    )
+
+    class Config:
+        from_attributes = True
+
+class UserProfileUpdate(BaseModel):
+    first_name: Optional[str]
+    last_name: Optional[str]
+    bio: Optional[str]
+    profile_picture_url: Optional[str]
+    linkedin_profile_url: Optional[str]
+    github_profile_url: Optional[str]
+
+    @root_validator(pre=True)
+    def at_least_one_field(cls, values):
+        if not any(values.values()):
+            raise ValueError("At least one field must be provided")
+        return values

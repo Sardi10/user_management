@@ -27,11 +27,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.dependencies import get_current_user, get_db, get_email_service, require_role
 from app.schemas.pagination_schema import EnhancedPagination
 from app.schemas.token_schema import TokenResponse
-from app.schemas.user_schemas import LoginRequest, UserBase, UserCreate, UserListResponse, UserResponse, UserUpdate
+from app.schemas.user_schemas import LoginRequest, UserBase, UserCreate, UserListResponse, UserResponse, UserUpdate, UserProfileDTO, UserProfileUpdate
 from app.services.user_service import UserService
 from app.services.jwt_service import create_access_token
+from app.models.user_model import User, UserRole
 from app.utils.link_generation import create_user_links, generate_pagination_links
-from app.dependencies import get_settings
+from app.dependencies import get_settings, get_db, get_current_user
 from app.services.email_service import EmailService
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
@@ -245,3 +246,80 @@ async def verify_email(user_id: UUID, token: str, db: AsyncSession = Depends(get
     if await UserService.verify_email_with_token(db, user_id, token):
         return {"message": "Email verified successfully"}
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired verification token")
+
+# GET /users/me
+@router.get(
+    "/me",
+    response_model=UserProfileDTO,
+    name="get_my_profile",
+    responses={
+        200: {
+            "description": "Successful Response",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "user_profile": {
+                            "summary": "A sample user profile",
+                            "value": {
+                                "id": "0923c31a-40d2-4e86-8b27-80542567acd8",
+                                "email": "john.doe@example.com",
+                                "nickname": "jolly_lion_664",
+                                "first_name": "John",
+                                "last_name": "Doe",
+                                "bio": "Experienced software developer specializing in web applications.",
+                                "profile_picture_url": "https://example.com/profiles/john.jpg",
+                                "linkedin_profile_url": "https://linkedin.com/in/johndoe",
+                                "github_profile_url": "https://github.com/johndoe",
+                                "role": "ANONYMOUS",
+                                "is_professional": False,
+                                "professional_status_updated_at": None
+                            }
+                        }
+                    }
+                }
+            },
+        }
+    },
+)
+async def get_my_profile(
+    current_user: User = Depends(get_current_user),
+) -> UserProfileDTO:
+    return current_user
+
+
+
+# PATCH /users/me
+@router.patch("/me", response_model=UserProfileDTO, name="update_my_profile")
+async def update_my_profile(
+    updates: UserProfileUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    for field, val in updates.model_dump(exclude_unset=True).items():
+        setattr(current_user, field, val)
+    db.add(current_user)
+    await db.commit()
+    await db.refresh(current_user)
+    return current_user
+
+# POST /users/{user_id}/upgrade-pro
+@router.post(
+    "/{user_id}/upgrade-pro",
+    status_code=status.HTTP_200_OK,
+    name="upgrade_to_pro",
+)
+async def upgrade_to_pro(
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role not in (UserRole.ADMIN, UserRole.MANAGER):
+        raise HTTPException(status_code=403, detail="Insufficient privileges")
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.is_professional = True
+    user.professional_status_updated_at = datetime.utcnow()
+    db.add(user)
+    await db.commit()
+    return {"message": "Upgraded to professional status"}
