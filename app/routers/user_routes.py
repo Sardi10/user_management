@@ -34,8 +34,11 @@ from app.models.user_model import User, UserRole
 from app.utils.link_generation import create_user_links, generate_pagination_links
 from app.dependencies import get_settings, get_db, get_current_user
 from app.services.email_service import EmailService
+from app.dependencies import require_user
+
 router = APIRouter()
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login/")
+# oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 settings = get_settings()
 @router.get("/users/{user_id}", response_model=UserResponse, name="get_user", tags=["User Management Requires (Admin or Manager Roles)"])
 async def get_user(user_id: UUID, request: Request, db: AsyncSession = Depends(get_db), token: str = Depends(oauth2_scheme), current_user: dict = Depends(require_role(["ADMIN", "MANAGER"]))):
@@ -210,7 +213,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), session: Async
         access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
 
         access_token = create_access_token(
-            data={"sub": user.email, "role": str(user.role.name)},
+           data={"sub": str(user.id), "role": str(user.role.name)},
             expires_delta=access_token_expires
         )
 
@@ -247,44 +250,12 @@ async def verify_email(user_id: UUID, token: str, db: AsyncSession = Depends(get
         return {"message": "Email verified successfully"}
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired verification token")
 
-# GET /users/me
-@router.get(
-    "/me",
-    response_model=UserProfileDTO,
-    name="get_my_profile",
-    responses={
-        200: {
-            "description": "Successful Response",
-            "content": {
-                "application/json": {
-                    "examples": {
-                        "user_profile": {
-                            "summary": "A sample user profile",
-                            "value": {
-                                "id": "0923c31a-40d2-4e86-8b27-80542567acd8",
-                                "email": "john.doe@example.com",
-                                "nickname": "jolly_lion_664",
-                                "first_name": "John",
-                                "last_name": "Doe",
-                                "bio": "Experienced software developer specializing in web applications.",
-                                "profile_picture_url": "https://example.com/profiles/john.jpg",
-                                "linkedin_profile_url": "https://linkedin.com/in/johndoe",
-                                "github_profile_url": "https://github.com/johndoe",
-                                "role": "ANONYMOUS",
-                                "is_professional": False,
-                                "professional_status_updated_at": None
-                            }
-                        }
-                    }
-                }
-            },
-        }
-    },
-)
-async def get_my_profile(
-    current_user: User = Depends(get_current_user),
-) -> UserProfileDTO:
-    return current_user
+# # GET /users/me
+# @router.get("/me", response_model=UserProfileDTO, name="get_my_profile")
+# async def get_my_profile(
+#     current_user: User = Depends(get_current_user),
+# ):
+#     return current_user
 
 
 
@@ -323,3 +294,14 @@ async def upgrade_to_pro(
     db.add(user)
     await db.commit()
     return {"message": "Upgraded to professional status"}
+
+@router.get(
+    "/me",
+    response_model=UserProfileDTO,
+    tags=["User Management"]
+)
+async def get_my_profile(
+      current_user: User = Depends(get_current_user),
+):
+    return current_user
+   
