@@ -248,11 +248,45 @@ async def verify_email(user_id: UUID, token: str, db: AsyncSession = Depends(get
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired verification token")
 
 # GET /users/me
-@router.get("/me", response_model=UserProfileDTO, name="get_my_profile")
+@router.get(
+    "/me",
+    response_model=UserProfileDTO,
+    name="get_my_profile",
+    responses={
+        200: {
+            "description": "Successful Response",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "user_profile": {
+                            "summary": "A sample user profile",
+                            "value": {
+                                "id": "0923c31a-40d2-4e86-8b27-80542567acd8",
+                                "email": "john.doe@example.com",
+                                "nickname": "jolly_lion_664",
+                                "first_name": "John",
+                                "last_name": "Doe",
+                                "bio": "Experienced software developer specializing in web applications.",
+                                "profile_picture_url": "https://example.com/profiles/john.jpg",
+                                "linkedin_profile_url": "https://linkedin.com/in/johndoe",
+                                "github_profile_url": "https://github.com/johndoe",
+                                "role": "ANONYMOUS",
+                                "is_professional": False,
+                                "professional_status_updated_at": None
+                            }
+                        }
+                    }
+                }
+            },
+        }
+    },
+)
 async def get_my_profile(
     current_user: User = Depends(get_current_user),
-):
+) -> UserProfileDTO:
     return current_user
+
+
 
 # PATCH /users/me
 @router.patch("/me", response_model=UserProfileDTO, name="update_my_profile")
