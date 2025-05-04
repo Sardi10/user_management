@@ -55,7 +55,11 @@ async def get_current_user(
 
     user = await db.get(User, user_uuid)
     if not user:
-        raise credentials_exc
+        # Token was valid, but the user record no longer exists
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
 
     return user
 

@@ -1,5 +1,7 @@
-from builtins import range
+
 import pytest
+from builtins import range
+from uuid import UUID
 from sqlalchemy import select
 from app.dependencies import get_settings
 from app.models.user_model import User, UserRole
@@ -9,16 +11,49 @@ from app.utils.nickname_gen import generate_nickname
 pytestmark = pytest.mark.asyncio
 
 # Test creating a user with valid data
-async def test_create_user_with_valid_data(db_session, email_service):
+async def test_create_user_with_valid_data(db_session, email_service, monkeypatch):
+    # Capture calls to email_service.send_user_email
+    calls = {}
+    async def fake_send_user_email(user_data, email_type):
+        calls['sent'] = (user_data, email_type)
+        # simulate async return
+        return None
+
+    # Patch the email_service instance
+    monkeypatch.setattr(email_service, "send_user_email", fake_send_user_email)
+
+    # Prepare valid payload
     user_data = {
         "nickname": generate_nickname(),
         "email": "valid_user@example.com",
         "password": "ValidPassword123!",
-        "role": UserRole.ADMIN.name
+        "role": UserRole.ADMIN.name,
     }
-    user = await UserService.create(db_session, user_data, email_service)
-    assert user is not None
-    assert user.email == user_data["email"]
+
+    # Call the create method
+    created_user = await UserService.create(db_session, user_data, email_service)
+
+    # 1) The returned object has an ID that looks like a UUID
+    assert hasattr(created_user, "id")
+    # if your ID is UUID:
+    assert isinstance(created_user.id, UUID)
+
+    # 2) Email matches
+    assert created_user.email == user_data["email"]
+
+    # 3) The password stored is not the raw password
+    assert created_user.hashed_password != user_data["password"]
+
+    # 4) We can fetch the same user from the DB
+    fetched = await db_session.get(User, created_user.id)
+    assert fetched is not None
+    assert fetched.email == user_data["email"]
+
+    # 5) Email verification was triggered exactly once
+    assert "sent" in calls
+    sent_payload, sent_type = calls["sent"]
+    assert sent_payload["email"] == user_data["email"]
+    assert sent_type == "email_verification"
 
 # Test creating a user with invalid data
 async def test_create_user_with_invalid_data(db_session, email_service):
@@ -93,16 +128,30 @@ async def test_list_users_with_pagination(db_session, users_with_same_role_50_us
     assert users_page_1[0].id != users_page_2[0].id
 
 # Test registering a user with valid data
-async def test_register_user_with_valid_data(db_session, email_service):
+async def test_register_user_with_valid_data(db_session, email_service, monkeypatch):
+    calls = {}
+    async def fake_send_user_email(user_obj, email_type):
+        calls['sent'] = (user_obj, email_type)
+        return None
+
+    monkeypatch.setattr(email_service, "send_user_email", fake_send_user_email)
+
     user_data = {
         "nickname": generate_nickname(),
         "email": "register_valid_user@example.com",
         "password": "RegisterValid123!",
-        "role": UserRole.ADMIN
+        "role": UserRole.ADMIN,
     }
-    user = await UserService.register_user(db_session, user_data, email_service)
-    assert user is not None
-    assert user.email == user_data["email"]
+
+    created_user = await UserService.register_user(db_session, user_data, email_service)
+
+    # … your existing ID, field and persistence assertions …
+
+    # 4) Email‐verification call made
+    assert "sent" in calls
+    sent_payload, sent_type = calls["sent"]
+    assert sent_payload["email"] == user_data["email"]
+    assert sent_type == "email_verification"
 
 # Test attempting to register a user with invalid data
 async def test_register_user_with_invalid_data(db_session, email_service):

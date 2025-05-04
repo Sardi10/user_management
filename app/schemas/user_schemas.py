@@ -37,6 +37,10 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     email: EmailStr = Field(..., example="john.doe@example.com")
     password: str = Field(..., example="Secure*1234")
+    # registration clients shouldn’t need to pick a role:
+    role: UserRole = Field(
+        default=UserRole.ANONYMOUS,
+        description="(automatically assigned) default to ANONYMOUS")
 
 class UserUpdate(UserBase):
     email: Optional[EmailStr] = Field(None, example="john.doe@example.com")

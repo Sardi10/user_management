@@ -48,10 +48,9 @@ AsyncSessionScoped = scoped_session(AsyncTestingSessionLocal)
 
 @pytest.fixture
 def email_service():
-    # Assuming the TemplateManager does not need any arguments for initialization
-    template_manager = TemplateManager()
-    email_service = EmailService(template_manager=template_manager)
-    return email_service
+    # Always use a real service here so we can patch its collaborators
+    tm = TemplateManager()
+    return EmailService(template_manager=tm)
 
 
 # this is what creates the http client for your api tests
@@ -227,14 +226,14 @@ def user_token(user):
     token_data = {"sub": str(user.id), "role": user.role.name}
     return create_access_token(data=token_data, expires_delta=timedelta(minutes=30))
 
-@pytest.fixture
-def email_service():
-    if settings.send_real_mail == 'true':
-        # Return the real email service when specifically testing email functionality
-        return EmailService()
-    else:
-        # Otherwise, use a mock to prevent actual email sending
-        mock_service = AsyncMock(spec=EmailService)
-        mock_service.send_verification_email.return_value = None
-        mock_service.send_user_email.return_value = None
-        return mock_service
+# @pytest.fixture
+# def email_service():
+#     if settings.send_real_mail == 'true':
+#         # Return the real email service when specifically testing email functionality
+#         return EmailService()
+#     else:
+#         # Otherwise, use a mock to prevent actual email sending
+#         mock_service = AsyncMock(spec=EmailService)
+#         mock_service.send_verification_email.return_value = None
+#         mock_service.send_user_email.return_value = None
+#         return mock_service
