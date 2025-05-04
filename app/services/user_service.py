@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 import secrets
 from typing import Optional, Dict, List
 from pydantic import ValidationError
-from sqlalchemy import func, null, update, select
+from sqlalchemy import func, null, update, select, or_
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.dependencies import get_email_service, get_settings
@@ -215,3 +215,47 @@ class UserService:
             await session.commit()
             return True
         return False
+
+    
+    @classmethod
+    async def search_users(
+        cls,
+        session: AsyncSession,
+        q: str | None,
+        role: UserRole | None,
+        is_professional: bool | None,
+        skip: int,
+        limit: int,
+    ) -> tuple[list[User], int]:
+        stmt = select(User)
+
+        # full‐text–style filtering on name/email/nickname
+        if q:
+            pattern = f"%{q.lower()}%"
+            stmt = stmt.where(
+                or_(
+                    func.lower(User.first_name).like(pattern),
+                    func.lower(User.last_name).like(pattern),
+                    func.lower(User.email).like(pattern),
+                    func.lower(User.nickname).like(pattern),
+                )
+            )
+
+        # exact match filters
+        if role:
+            stmt = stmt.where(User.role == role)
+        if is_professional is not None:
+            stmt = stmt.where(User.is_professional == is_professional)
+
+        # count total before pagination
+        total = (await session.execute(
+            stmt.with_only_columns(func.count()).order_by(None)
+        )).scalar_one()
+
+        # apply skip/limit & ordering
+        rows = await session.execute(
+            stmt.offset(skip)
+                .limit(limit)
+                .order_by(User.created_at.desc())
+        )
+        return rows.scalars().all(), total
