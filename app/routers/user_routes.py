@@ -21,7 +21,8 @@ Key Highlights:
 from builtins import dict, int, len, str
 from datetime import timedelta
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, Response, status, Request
+from typing import Sequence, Union
+from fastapi import APIRouter, Depends, HTTPException, Response, status, Request, Query
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.dependencies import get_current_user, get_db, get_email_service, require_role
@@ -34,7 +35,6 @@ from app.models.user_model import User, UserRole
 from app.utils.link_generation import create_user_links, generate_pagination_links
 from app.dependencies import get_settings, get_db, get_current_user
 from app.services.email_service import EmailService
-from app.dependencies import require_user
 from datetime import datetime
 
 router = APIRouter()
@@ -170,16 +170,39 @@ async def create_user(user: UserCreate, request: Request, db: AsyncSession = Dep
     )
 
 
-@router.get("/users/", response_model=UserListResponse, tags=["User Management Requires (Admin or Manager Roles)"])
+@router.get(
+    "/users/",
+    response_model=UserListResponse,
+    name="list_users",
+    tags=["User Management Requires (Admin or Manager Roles)"]
+)
 async def list_users(
     request: Request,
     skip: int = 0,
     limit: int = 10,
+    q: str | None = Query(
+        None,
+        description="Search text matching first_name, last_name, email or nickname"
+    ),
+    role: UserRole | None = Query(
+        None,
+        description="Filter by exact role"
+    ),
+    is_professional: bool | None = Query(
+        None,
+        description="Filter by professional status"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(require_role(["ADMIN", "MANAGER"]))
 ):
-    total_users = await UserService.count(db)
-    users = await UserService.list_users(db, skip, limit)
+    users, total_users = await UserService.search_users(
+    db,
+    q=q,
+    role=role,
+    is_professional=is_professional,
+    skip=skip,
+    limit=limit)
+
 
     user_responses = [
         UserResponse.model_validate(user) for user in users

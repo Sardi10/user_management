@@ -1,5 +1,6 @@
 import uuid
 from uuid import UUID
+from typing import Sequence, Union
 from builtins import Exception, dict, str
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -10,7 +11,7 @@ from app.services.email_service import EmailService
 from app.services.jwt_service import decode_token
 from settings.config import Settings
 from fastapi import Depends
-from app.models.user_model import User
+from app.models.user_model import User, UserRole
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login/")
 
@@ -58,38 +59,28 @@ async def get_current_user(
 
     return user
 
-def require_role(role: str):
-    def role_checker(current_user: dict = Depends(get_current_user)):
-        if current_user["role"] not in role:
-            raise HTTPException(status_code=403, detail="Operation not permitted")
+def require_role(allowed: Sequence[Union[UserRole,str]]):
+    """
+    Dependency that ensures current_user.role is one of the allowed roles.
+    allowed can be enum members or their .name strings.
+    """
+    allowed_names = {
+        r.name if isinstance(r, UserRole) else str(r)
+        for r in allowed
+    }
+
+    def role_checker(current_user: User = Depends(get_current_user)) -> User:
+        # current_user.role is a UserRole enum
+        role_name = (
+            current_user.role.name
+            if isinstance(current_user.role, UserRole)
+            else str(current_user.role)
+        )
+        if role_name not in allowed_names:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Operation not permitted"
+            )
         return current_user
+
     return role_checker
-
-async def require_user(
-    token: str        = Depends(oauth2_scheme),
-    db: AsyncSession  = Depends(get_db),
-) -> User:
-    """
-    Ensure the incoming request has a valid Bearer token
-    and return the full User model.
-    """
-    credentials_exc = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Invalid credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-
-    payload = decode_token(token)
-    if not payload or "sub" not in payload:
-        raise credentials_exc
-
-    try:
-        user_id = uuid.UUID(payload["sub"])
-    except ValueError:
-        raise credentials_exc
-
-    user = await db.get(User, user_id)
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-
-    return user
