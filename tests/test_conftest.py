@@ -4,9 +4,11 @@ from builtins import len
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.future import select
-
+from app.utils.template_manager import TemplateManager
 from app.models.user_model import User, UserRole
 from app.utils.security import verify_password
+from app.utils.smtp_connection import SMTPClient
+from app.services.email_service import EmailService
 
 @pytest.mark.asyncio
 async def test_user_creation(db_session, verified_user):
@@ -62,3 +64,38 @@ async def test_update_professional_status(db_session, verified_user):
     updated_user = result.scalars().first()
     assert updated_user.is_professional
     assert updated_user.professional_status_updated_at is not None
+
+@pytest.mark.asyncio
+async def test_send_user_email_success(email_service, monkeypatch):
+    calls = {}
+
+    # stub out TemplateManager.render_template
+    def fake_render(self, template_name, **context):
+        calls['render'] = (template_name, context)
+        return "<html>OK</html>"
+
+    # stub out SMTPClient.send_email at the class level
+    def fake_send_email(self, subject, content, recipient):
+        calls['send'] = (subject, content, recipient)
+
+    # patch the two collaborators
+    monkeypatch.setattr(TemplateManager, 'render_template', fake_render)
+    monkeypatch.setattr(SMTPClient, 'send_email', fake_send_email)
+
+    user_data = {'email': 'bob@example.com', 'name': 'Bob'}
+    await email_service.send_user_email(user_data, 'email_verification')
+
+    # assertions
+    assert calls['render'][0] == 'email_verification'
+    assert calls['render'][1] == user_data
+    assert calls['send'] == (
+        "Verify Your Account",
+        "<html>OK</html>",
+        'bob@example.com'
+    )
+
+@pytest.mark.asyncio
+async def test_send_user_email_invalid_type(email_service):
+    with pytest.raises(ValueError) as exc:
+        await email_service.send_user_email({'email': 'x@x.com'}, 'no_such_type')
+    assert "Invalid email type" in str(exc.value)
