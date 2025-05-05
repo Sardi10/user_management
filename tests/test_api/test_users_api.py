@@ -459,60 +459,60 @@ async def test_login_invalid_credentials(async_client: AsyncClient, db_session: 
     assert resp.status_code == 401
     assert resp.json() == {"detail": "Incorrect email or password."}
 
-# @pytest.mark.asyncio
-# async def test_get_my_profile_returns_current_user(
-#     async_client: AsyncClient,
-#     db_session: AsyncSession,
-#     user_token: str
-# ):
-#     """
-#     The /me endpoint should return whatever `get_current_user` yields.
-#     Covers the single `return current_user` line.
-#     """
-#     # Seed a user in the DB so it has attributes
-#     test_user = User(
-#         id=uuid4(),
-#         nickname="profile_test",
-#         first_name="Profile",
-#         last_name="User",
-#         email="profile@example.com",
-#         hashed_password="irrelevant",
-#         role=UserRole.AUTHENTICATED,
-#         email_verified=True,
-#         is_locked=False,
-#         is_professional=False,
-#     )
-#     db_session.add(test_user)
-#     await db_session.commit()
+@pytest.mark.asyncio
+async def test_get_my_profile_returns_current_user(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+    user_token: str
+):
+    """
+    The /me endpoint should return whatever `get_current_user` yields.
+    Covers the single `return current_user` line.
+    """
+    # Seed a user in the DB so it has attributes
+    test_user = User(
+        id=uuid4(),
+        nickname="profile_test",
+        first_name="Profile",
+        last_name="User",
+        email="profile@example.com",
+        hashed_password="irrelevant",
+        role=UserRole.AUTHENTICATED,
+        email_verified=True,
+        is_locked=False,
+        is_professional=False,
+    )
+    db_session.add(test_user)
+    await db_session.commit()
 
-#     # Override the dependency to return our test_user
-#     app.dependency_overrides[get_current_user] = lambda: test_user
+    # Override the dependency to return our test_user
+    app.dependency_overrides[get_current_user] = lambda: test_user
 
-#     # Call the endpoint (header doesn’t matter because we’ve overridden the dependency)
-#     resp = await async_client.get("/me")
-#     assert resp.status_code == 200
+    # Call the endpoint (header doesn’t matter because we’ve overridden the dependency)
+    resp = await async_client.get("/me")
+    assert resp.status_code == 200
 
-#     data = resp.json()
-#     # Verify all UserProfileDTO fields
-#     assert data["id"] == str(test_user.id)
-#     assert data["email"] == test_user.email
-#     assert data["nickname"] == test_user.nickname
-#     assert data["first_name"] == test_user.first_name
-#     assert data["last_name"] == test_user.last_name
+    data = resp.json()
+    # Verify all UserProfileDTO fields
+    assert data["id"] == str(test_user.id)
+    assert data["email"] == test_user.email
+    assert data["nickname"] == test_user.nickname
+    assert data["first_name"] == test_user.first_name
+    assert data["last_name"] == test_user.last_name
 
-#     # Optional fields default to None
-#     assert data["bio"] is None
-#     assert data["profile_picture_url"] is None
-#     assert data["linkedin_profile_url"] is None
-#     assert data["github_profile_url"] is None
+    # Optional fields default to None
+    assert data["bio"] is None
+    assert data["profile_picture_url"] is None
+    assert data["linkedin_profile_url"] is None
+    assert data["github_profile_url"] is None
 
-#     # Role and professional status
-#     assert data["role"] == test_user.role.name
-#     assert data["is_professional"] is False
-#     assert data["professional_status_updated_at"] is None
+    # Role and professional status
+    assert data["role"] == test_user.role.name
+    assert data["is_professional"] is False
+    assert data["professional_status_updated_at"] is None
 
-#     # Cleanup
-#     app.dependency_overrides.pop(get_current_user)
+    # Cleanup
+    app.dependency_overrides.pop(get_current_user)
 
 # @pytest.mark.asyncio
 # async def test_upgrade_to_pro_insufficient_privileges(db_session: AsyncSession, user):
