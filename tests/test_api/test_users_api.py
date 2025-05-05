@@ -396,42 +396,42 @@ async def test_login_locked_account(
     assert resp.json() == {"detail": "Account locked due to too many failed login attempts."}
 
 
-# @pytest.mark.asyncio
-# async def test_login_success(async_client: AsyncClient, db_session: AsyncSession, monkeypatch):
-#     """
-#     If credentials are valid, login should return a bearer token.
-#     Covers the path where is_account_locked → False and login_user returns a user.
-#     """
-#     # 1) Patch is_account_locked → False
-#     async def fake_is_locked(session, username):
-#         return False
-#     monkeypatch.setattr(UserService, "is_account_locked", fake_is_locked)
+@pytest.mark.asyncio
+async def test_login_success(async_client: AsyncClient, db_session: AsyncSession, monkeypatch):
+    """
+    If credentials are valid, login should return a bearer token.
+    Covers the path where is_account_locked → False and login_user returns a user.
+    """
+    # 1) Patch is_account_locked → False
+    async def fake_is_locked(session, username):
+        return False
+    monkeypatch.setattr(UserService, "is_account_locked", fake_is_locked)
 
-#     # 2) Patch login_user → return dummy user with id and role
-#     class DummyUser:
-#         id = uuid4()
-#         role = UserRole.AUTHENTICATED
-#     async def fake_login_user(session, username, password):
-#         return DummyUser()
-#     monkeypatch.setattr(UserService, "login_user", fake_login_user)
+    # 2) Patch login_user → return dummy user with id and role
+    class DummyUser:
+        id = uuid4()
+        role = UserRole.AUTHENTICATED
+    async def fake_login_user(session, username, password):
+        return DummyUser()
+    monkeypatch.setattr(UserService, "login_user", fake_login_user)
 
-#     # 3) Patch create_access_token in the router module so we get a predictable token
-#     import app.routers.user_routes as ur_mod
-#     monkeypatch.setattr(
-#         ur_mod,
-#         "create_access_token",
-#         lambda data, expires_delta: "fake-jwt-token"
-#     )
+    # 3) Patch create_access_token in the router module so we get a predictable token
+    import app.routers.user_routes as ur_mod
+    monkeypatch.setattr(
+        ur_mod,
+        "create_access_token",
+        lambda data, expires_delta: "fake-jwt-token"
+    )
 
-#     # 4) Perform login request
-#     resp = await async_client.post(
-#         "/login/",
-#         data={"username": "user@example.com", "password": "ValidPass!"},
-#         headers={"Content-Type": "application/x-www-form-urlencoded"}
-#     )
-#     assert resp.status_code == 200
-#     body = resp.json()
-#     assert body == {"access_token": "fake-jwt-token", "token_type": "bearer"}
+    # 4) Perform login requestt
+    resp = await async_client.post(
+        "/login/",
+        data={"username": "user@example.com", "password": "ValidPass!"},
+        headers={"Content-Type": "application/x-www-form-urlencoded"}
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body == {"access_token": "fake-jwt-token", "token_type": "bearer"}
 
 
 # @pytest.mark.asyncio
