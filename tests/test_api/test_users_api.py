@@ -514,15 +514,15 @@ async def test_get_my_profile_returns_current_user(
     # Cleanupp
     app.dependency_overrides.pop(get_current_user)
 
-# @pytest.mark.asyncio
-# async def test_upgrade_to_pro_insufficient_privileges(db_session: AsyncSession, user):
-#     """
-#     Non-Admin/Manager user should hit the first HTTPException(403).
-#     """
-#     with pytest.raises(HTTPException) as exc_info:
-#         await upgrade_to_pro(uuid4(), db_session, user)
-#     assert exc_info.value.status_code == 403
-#     assert exc_info.value.detail == "Insufficient privileges"
+@pytest.mark.asyncio
+async def test_upgrade_to_pro_insufficient_privileges(db_session: AsyncSession, user):
+    """
+    Non-Admin/Manager user should hit the first HTTPException(403).
+    """
+    with pytest.raises(HTTPException) as exc_info:
+        await upgrade_to_pro(uuid4(), db_session, user)
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail == "Insufficient privileges"
 
 # @pytest.mark.asyncio
 # async def test_upgrade_to_pro_user_not_found(db_session: AsyncSession, admin_user):
