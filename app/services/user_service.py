@@ -1,9 +1,9 @@
 from builtins import Exception, bool, classmethod, int, str
 from datetime import datetime, timezone
 import secrets
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Tuple
 from pydantic import ValidationError
-from sqlalchemy import func, null, update, select
+from sqlalchemy import func, null, update, select, or_
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.dependencies import get_email_service, get_settings
@@ -50,32 +50,53 @@ class UserService:
         return await cls._fetch_user(session, email=email)
 
     @classmethod
-    async def create(cls, session: AsyncSession, user_data: Dict[str, str], email_service: EmailService) -> Optional[User]:
+    async def create(
+        cls,
+        session: AsyncSession,
+        user_data: Dict[str, str],
+        email_service: EmailService
+    ) -> Optional[User]:
         try:
+            # 1) Validate incoming payload
             validated_data = UserCreate(**user_data).model_dump()
-            existing_user = await cls.get_by_email(session, validated_data['email'])
+
+            # 2) Check for existing email
+            existing_user = await cls.get_by_email(session, validated_data["email"])
             if existing_user:
                 logger.error("User with given email already exists.")
                 return None
-            validated_data['hashed_password'] = hash_password(validated_data.pop('password'))
+
+            # 3) Hash & remove plain password
+            validated_data["hashed_password"] = hash_password(validated_data.pop("password"))
+
+            # 4) Build User, assign random nickname
             new_user = User(**validated_data)
             new_nickname = generate_nickname()
             while await cls.get_by_nickname(session, new_nickname):
                 new_nickname = generate_nickname()
             new_user.nickname = new_nickname
-            logger.info(f"User Role: {new_user.role}")
+
+            # 5) First user → ADMIN, everyone else → ANONYMOUS
             user_count = await cls.count(session)
-            new_user.role = UserRole.ADMIN if user_count == 0 else UserRole.ANONYMOUS            
+            new_user.role = UserRole.ADMIN if user_count == 0 else UserRole.ANONYMOUS
+
+            # 6) Stage the new user so Postgres gives us an ID on flush
+            session.add(new_user)
+            await session.flush()
+
+            # 7) Now that new_user.id is known, set verification or auto-verify admin
             if new_user.role == UserRole.ADMIN:
                 new_user.email_verified = True
-
             else:
                 new_user.verification_token = generate_verification_token()
-                await email_service.send_verification_email(new_user)
+            await email_service.send_verification_email(new_user)
 
-            session.add(new_user)
+            # 8) Persist both the insert and our updates, then refresh
             await session.commit()
+            await session.refresh(new_user)
+
             return new_user
+
         except ValidationError as e:
             logger.error(f"Validation error during user creation: {e}")
             return None
@@ -199,3 +220,58 @@ class UserService:
             await session.commit()
             return True
         return False
+
+    
+    @classmethod
+    async def search_users(
+        cls,
+        session: AsyncSession,
+        *,
+        q: Optional[str] = None,
+        role: Optional[UserRole] = None,
+        is_professional: Optional[bool] = None,
+        skip: int = 0,
+        limit: int = 10,
+    ) -> Tuple[List[User], int]:
+        # 1) Build count query
+        count_stmt = select(func.count()).select_from(User)
+
+        # 2) Build main select
+        sel_stmt = select(User)
+
+        # 3) Text search
+        if q:
+            p = f"%{q.lower()}%"
+            text_filter = or_(
+                func.lower(User.first_name).like(p),
+                func.lower(User.last_name).like(p),
+                func.lower(User.email).like(p),
+                func.lower(User.nickname).like(p),
+            )
+            sel_stmt = sel_stmt.where(text_filter)
+            count_stmt = count_stmt.where(text_filter)
+
+        # 4) Role filter
+        if role:
+            sel_stmt = sel_stmt.where(User.role == role)
+            count_stmt = count_stmt.where(User.role == role)
+
+        # 5) Professional status filter
+        if is_professional is not None:
+            sel_stmt = sel_stmt.where(User.is_professional == is_professional)
+            count_stmt = count_stmt.where(User.is_professional == is_professional)
+
+        # 6) Execute count
+        total = (await session.execute(count_stmt)).scalar_one()
+
+        # 7) Apply pagination & ordering
+        sel_stmt = (
+            sel_stmt
+            .order_by(User.created_at.desc())
+            .offset(skip)
+            .limit(limit)
+        )
+        result = await session.execute(sel_stmt)
+        users = result.scalars().all()
+
+        return users, total

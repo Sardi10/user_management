@@ -1,5 +1,8 @@
+import uuid
+from uuid import UUID
+from typing import Sequence, Union
 from builtins import Exception, dict, str
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import Database
@@ -8,6 +11,9 @@ from app.services.email_service import EmailService
 from app.services.jwt_service import decode_token
 from settings.config import Settings
 from fastapi import Depends
+from app.models.user_model import User, UserRole
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login/")
 
 def get_settings() -> Settings:
     """Return application settings."""
@@ -27,26 +33,58 @@ async def get_db() -> AsyncSession:
             raise HTTPException(status_code=500, detail=str(e))
         
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 
-def get_current_user(token: str = Depends(oauth2_scheme)):
-    credentials_exception = HTTPException(
-        status_code=401,
+
+async def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    credentials_exc = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
     payload = decode_token(token)
-    if payload is None:
-        raise credentials_exception
-    user_id: str = payload.get("sub")
-    user_role: str = payload.get("role")
-    if user_id is None or user_role is None:
-        raise credentials_exception
-    return {"user_id": user_id, "role": user_role}
+    if not payload or "sub" not in payload:
+        raise credentials_exc
 
-def require_role(role: str):
-    def role_checker(current_user: dict = Depends(get_current_user)):
-        if current_user["role"] not in role:
-            raise HTTPException(status_code=403, detail="Operation not permitted")
+    try:
+        user_uuid = UUID(payload["sub"])   # ← now this will succeed
+    except ValueError:
+        raise credentials_exc
+
+    user = await db.get(User, user_uuid)
+    if not user:
+        # Token was valid, but the user record no longer exists
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    return user
+
+def require_role(allowed: Sequence[Union[UserRole,str]]):
+    """
+    Dependency that ensures current_user.role is one of the allowed roles.
+    allowed can be enum members or their .name strings.
+    """
+    allowed_names = {
+        r.name if isinstance(r, UserRole) else str(r)
+        for r in allowed
+    }
+
+    def role_checker(current_user: User = Depends(get_current_user)) -> User:
+        # current_user.role is a UserRole enum
+        role_name = (
+            current_user.role.name
+            if isinstance(current_user.role, UserRole)
+            else str(current_user.role)
+        )
+        if role_name not in allowed_names:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Operation not permitted"
+            )
         return current_user
+
     return role_checker

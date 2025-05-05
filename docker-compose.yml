@@ -32,6 +32,14 @@ services:
 
   fastapi:
     build: .
+    env_file:
+      - .env
+    environment:
+      - SMTP_SERVER=${smtp_server}
+      - SMTP_PORT=${smtp_port}
+      - SMTP_USERNAME=${smtp_username}
+      - SMTP_PASSWORD=${smtp_password}
+      - DATABASE_URL=postgresql+asyncpg://user:password@postgres:5432/myappdb
     volumes:
       - ./:/myapp/
     depends_on:
@@ -39,6 +47,8 @@ services:
         condition: service_healthy
     networks:
       - app-network
+    ports:
+      - "8000:8000"
 
   nginx:
     image: nginx:latest

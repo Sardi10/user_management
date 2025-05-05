@@ -21,20 +21,25 @@ Key Highlights:
 from builtins import dict, int, len, str
 from datetime import timedelta
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, Response, status, Request
+from typing import Sequence, Union, Optional
+from fastapi import APIRouter, Depends, HTTPException, Response, status, Request, Query
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.dependencies import get_current_user, get_db, get_email_service, require_role
 from app.schemas.pagination_schema import EnhancedPagination
 from app.schemas.token_schema import TokenResponse
-from app.schemas.user_schemas import LoginRequest, UserBase, UserCreate, UserListResponse, UserResponse, UserUpdate
+from app.schemas.user_schemas import LoginRequest, UserBase, UserCreate, UserListResponse, UserResponse, UserUpdate, UserProfileDTO, UserProfileUpdate
 from app.services.user_service import UserService
 from app.services.jwt_service import create_access_token
+from app.models.user_model import User, UserRole
 from app.utils.link_generation import create_user_links, generate_pagination_links
-from app.dependencies import get_settings
+from app.dependencies import get_settings, get_db, get_current_user
 from app.services.email_service import EmailService
+from datetime import datetime
+
 router = APIRouter()
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login/")
+# oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 settings = get_settings()
 @router.get("/users/{user_id}", response_model=UserResponse, name="get_user", tags=["User Management Requires (Admin or Manager Roles)"])
 async def get_user(user_id: UUID, request: Request, db: AsyncSession = Depends(get_db), token: str = Depends(oauth2_scheme), current_user: dict = Depends(require_role(["ADMIN", "MANAGER"]))):
@@ -165,16 +170,39 @@ async def create_user(user: UserCreate, request: Request, db: AsyncSession = Dep
     )
 
 
-@router.get("/users/", response_model=UserListResponse, tags=["User Management Requires (Admin or Manager Roles)"])
+@router.get(
+    "/users/",
+    response_model=UserListResponse,
+    name="list_users",
+    tags=["User Management Requires (Admin or Manager Roles)"]
+)
 async def list_users(
     request: Request,
     skip: int = 0,
     limit: int = 10,
+    q: str | None = Query(
+        None,
+        description="Search text matching first_name, last_name, email or nickname"
+    ),
+    role: UserRole | None = Query(
+        None,
+        description="Filter by exact role"
+    ),
+    is_professional: bool | None = Query(
+        None,
+        description="Filter by professional status"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(require_role(["ADMIN", "MANAGER"]))
 ):
-    total_users = await UserService.count(db)
-    users = await UserService.list_users(db, skip, limit)
+    users, total_users = await UserService.search_users(
+    db,
+    q=q,
+    role=role,
+    is_professional=is_professional,
+    skip=skip,
+    limit=limit)
+
 
     user_responses = [
         UserResponse.model_validate(user) for user in users
@@ -199,22 +227,22 @@ async def register(user_data: UserCreate, session: AsyncSession = Depends(get_db
         return user
     raise HTTPException(status_code=400, detail="Email already exists")
 
-@router.post("/login/", response_model=TokenResponse, tags=["Login and Registration"])
-async def login(form_data: OAuth2PasswordRequestForm = Depends(), session: AsyncSession = Depends(get_db)):
-    if await UserService.is_account_locked(session, form_data.username):
-        raise HTTPException(status_code=400, detail="Account locked due to too many failed login attempts.")
+# @router.post("/login/", response_model=TokenResponse, tags=["Login and Registration"])
+# async def login(form_data: OAuth2PasswordRequestForm = Depends(), session: AsyncSession = Depends(get_db)):
+#     if await UserService.is_account_locked(session, form_data.username):
+#         raise HTTPException(status_code=400, detail="Account locked due to too many failed login attempts.")
 
-    user = await UserService.login_user(session, form_data.username, form_data.password)
-    if user:
-        access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+#     user = await UserService.login_user(session, form_data.username, form_data.password)
+#     if user:
+#         access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
 
-        access_token = create_access_token(
-            data={"sub": user.email, "role": str(user.role.name)},
-            expires_delta=access_token_expires
-        )
+#         access_token = create_access_token(
+#            data={"sub": str(user.id), "role": str(user.role.name)},
+#             expires_delta=access_token_expires
+#         )
 
-        return {"access_token": access_token, "token_type": "bearer"}
-    raise HTTPException(status_code=401, detail="Incorrect email or password.")
+#         return {"access_token": access_token, "token_type": "bearer"}
+#     raise HTTPException(status_code=401, detail="Incorrect email or password.")
 
 @router.post("/login/", include_in_schema=False, response_model=TokenResponse, tags=["Login and Registration"])
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), session: AsyncSession = Depends(get_db)):
@@ -226,9 +254,12 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), session: Async
         access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
 
         access_token = create_access_token(
-            data={"sub": user.email, "role": str(user.role.name)},
-            expires_delta=access_token_expires
-        )
+            data={"sub": str(user.id),"role": str(user.role.name)},
+            expires_delta=access_token_expires)
+        # access_token = create_access_token(
+        #     data={"sub": user.email, "role": str(user.role.name)},
+        #     expires_delta=access_token_expires
+        # )
 
         return {"access_token": access_token, "token_type": "bearer"}
     raise HTTPException(status_code=401, detail="Incorrect email or password.")
@@ -245,3 +276,59 @@ async def verify_email(user_id: UUID, token: str, db: AsyncSession = Depends(get
     if await UserService.verify_email_with_token(db, user_id, token):
         return {"message": "Email verified successfully"}
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired verification token")
+
+# # GET /users/me
+# @router.get("/me", response_model=UserProfileDTO, name="get_my_profile")
+# async def get_my_profile(
+#     current_user: User = Depends(get_current_user),
+# ):
+#     return current_user
+
+
+
+# PATCH /users/me
+@router.patch("/me", response_model=UserProfileDTO, name="update_my_profile")
+async def update_my_profile(
+    updates: UserProfileUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    for field, val in updates.model_dump(exclude_unset=True).items():
+        setattr(current_user, field, val)
+    db.add(current_user)
+    await db.commit()
+    await db.refresh(current_user)
+    return current_user
+
+# POST /users/{user_id}/upgrade-pro
+@router.post(
+    "/{user_id}/upgrade-pro",
+    status_code=status.HTTP_200_OK,
+    name="upgrade_to_pro",
+)
+async def upgrade_to_pro(
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role not in (UserRole.ADMIN, UserRole.MANAGER):
+        raise HTTPException(status_code=403, detail="Insufficient privileges")
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.is_professional = True
+    user.professional_status_updated_at = datetime.utcnow()
+    db.add(user)
+    await db.commit()
+    return {"message": "Upgraded to professional status"}
+
+@router.get(
+    "/me",
+    response_model=UserProfileDTO,
+    tags=["User Management"]
+)
+async def get_my_profile(
+      current_user: User = Depends(get_current_user),
+):
+    return current_user
+   
