@@ -535,15 +535,15 @@ async def test_upgrade_to_pro_user_not_found(db_session: AsyncSession, admin_use
     assert exc_info.value.status_code == 404
     assert exc_info.value.detail == "User not found"
 
-# @pytest.mark.asyncio
-# async def test_upgrade_to_pro_success(db_session: AsyncSession, manager_user, monkeypatch):
-#     """
-#     Manager role + existing user → flips is_professional, sets timestamp, and returns success dict.
-#     """
-#     # Freeze datetime.utcnow()
-#     fixed_time = datetime(2025, 5, 4, 12, 0, 0)
-#     FakeDatetime = type("FakeDatetime", (), {"utcnow": staticmethod(lambda: fixed_time)})
-#     monkeypatch.setattr(user_routes, "datetime", FakeDatetime)
+@pytest.mark.asyncio
+async def test_upgrade_to_pro_success(db_session: AsyncSession, manager_user, monkeypatch):
+    """
+    Manager role + existing user → flips is_professional, sets timestamp, and returns success dict.
+    """
+    # Freeze datetime.utcnow()
+    fixed_time = datetime(2025, 5, 4, 12, 0, 0)
+    FakeDatetime = type("FakeDatetime", (), {"utcnow": staticmethod(lambda: fixed_time)})
+    monkeypatch.setattr(user_routes, "datetime", FakeDatetime)
 
 #     # Seed a target user with is_professional=False
 #     target = User(
