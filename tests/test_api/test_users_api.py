@@ -297,77 +297,77 @@ async def test_update_user_not_found(async_client: AsyncClient, admin_token: str
     assert resp.json() == {"detail": "User not found"}
 
 
-# @pytest.mark.asyncio
-# async def test_update_user_success(
-#     async_client: AsyncClient,
-#     db_session: AsyncSession,
-#     admin_token: str
-# ):
-#     """
-#     When updating an existing user, the endpoint should return 200 and reflect
-#     the changes in both the response payload and the database.
-#     """
-#     # 1) Seed a user into the database
-#     user = User(
-#         id=uuid4(),
-#         nickname=generate_nickname(),
-#         first_name="OldFirst",
-#         last_name="OldLast",
-#         email="update_test@example.com",
-#         hashed_password=hash_password("Password123!"),
-#         role=UserRole.AUTHENTICATED,
-#         email_verified=True,
-#         is_locked=False
-#     )
-#     db_session.add(user)
-#     await db_session.commit()
+@pytest.mark.asyncio
+async def test_update_user_success(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+    admin_token: str
+):
+    """
+    When updating an existing user, the endpoint should return 200 and reflect
+    the changes in both the response payload and the database.
+    """
+    # 1) Seed a user into the database
+    user = User(
+        id=uuid4(),
+        nickname=generate_nickname(),
+        first_name="OldFirst",
+        last_name="OldLast",
+        email="update_test@example.com",
+        hashed_password=hash_password("Password123!"),
+        role=UserRole.AUTHENTICATED,
+        email_verified=True,
+        is_locked=False
+    )
+    db_session.add(user)
+    await db_session.commit()
 
-#     # 2) Perform the PUT request as an admin
-#     headers = {"Authorization": f"Bearer {admin_token}"}
-#     payload = {
-#         "first_name": "NewFirst",
-#         "last_name": "NewLast"
-#     }
-#     resp = await async_client.put(f"/users/{user.id}", json=payload, headers=headers)
-#     assert resp.status_code == 200
+    # 2) Perform the PUT request as an admin
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    payload = {
+        "first_name": "NewFirst",
+        "last_name": "NewLast"
+    }
+    resp = await async_client.put(f"/users/{user.id}", json=payload, headers=headers)
+    assert resp.status_code == 200
 
-#     data = resp.json()
+    data = resp.json()
 
-#     # 3) The response should include exactly the fields defined in UserResponse
-#     expected_keys = {
-#         "id",
-#         "email",
-#         "nickname",
-#         "first_name",
-#         "last_name",
-#         "bio",
-#         "profile_picture_url",
-#         "linkedin_profile_url",
-#         "github_profile_url",
-#         "role",
-#         "is_professional",
-#     }
-#     assert expected_keys.issubset(data.keys())
+    # 3) The response should include exactly the fields defined in UserResponse
+    expected_keys = {
+        "id",
+        "email",
+        "nickname",
+        "first_name",
+        "last_name",
+        "bio",
+        "profile_picture_url",
+        "linkedin_profile_url",
+        "github_profile_url",
+        "role",
+        "is_professional",
+    }
+    assert expected_keys.issubset(data.keys())
 
-#     # 4) Validate that the updated fields match the payload
-#     assert data["first_name"] == "NewFirst"
-#     assert data["last_name"] == "NewLast"
+    # 4) Validate that the updated fields match the payload
+    assert data["first_name"] == "NewFirst"
+    assert data["last_name"] == "NewLast"
 
-#     # 5) Validate that unchanged fields are preserved
-#     assert data["email"] == user.email
-#     assert data["nickname"] == user.nickname
-#     assert data["role"] == user.role.name
+    # 5) Validate that unchanged fields are preserved
+    assert data["email"] == user.email
+    assert data["nickname"] == user.nickname
+    assert data["role"] == user.role.name
 
-#     # Optional fields default to None
-#     assert data["bio"] is None
-#     assert data["profile_picture_url"] is None
-#     assert data["linkedin_profile_url"] is None
-#     assert data["github_profile_url"] is None
+    # Optional fields default to None
+    assert data["bio"] is None
+    assert data["profile_picture_url"] is None
+    assert data["linkedin_profile_url"] is None
+    assert data["github_profile_url"] is None
 
-#     # 6) Confirm the changes persisted to the database
-#     refreshed = await db_session.get(User, user.id)
-#     assert refreshed.first_name == "NewFirst"
-#     assert refreshed.last_name == "NewLast"
+    # 6) Confirm the changes persisted to the databasee
+    refreshed = await db_session.get(User, user.id)
+    assert refreshed.first_name == "NewFirst"
+    assert refreshed.last_name == "NewLast"
 
 # @pytest.mark.asyncio
 # async def test_login_locked_account(
