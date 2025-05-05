@@ -434,30 +434,30 @@ async def test_login_success(async_client: AsyncClient, db_session: AsyncSession
     assert body == {"access_token": "fake-jwt-token", "token_type": "bearer"}
 
 
-# @pytest.mark.asyncio
-# async def test_login_invalid_credentials(async_client: AsyncClient, db_session: AsyncSession, monkeypatch):
-#     """
-#     If credentials are invalid (login_user returns None), login should return 401.
-#     Covers the final `raise HTTPException(status_code=401)` branch.
-#     """
-#     # 1) Patch is_account_locked → False
-#     async def fake_is_locked(session, username):
-#         return False
-#     monkeypatch.setattr(UserService, "is_account_locked", fake_is_locked)
+@pytest.mark.asyncio
+async def test_login_invalid_credentials(async_client: AsyncClient, db_session: AsyncSession, monkeypatch):
+    """
+    If credentials are invalid (login_user returns None), login should return 401.
+    Covers the final `raise HTTPException(status_code=401)` branch.
+    """
+    # 1) Patch is_account_locked → False
+    async def fake_is_locked(session, username):
+        return False
+    monkeypatch.setattr(UserService, "is_account_locked", fake_is_locked)
 
-#     # 2) Patch login_user → None
-#     async def fake_login_user(session, username, password):
-#         return None
-#     monkeypatch.setattr(UserService, "login_user", fake_login_user)
+    # 2) Patch login_user → None
+    async def fake_login_user(session, username, password):
+        return None
+    monkeypatch.setattr(UserService, "login_user", fake_login_user)
 
-#     # 3) Attempt login with bad creds
-#     resp = await async_client.post(
-#         "/login/",
-#         data={"username": "doesnotexist@example.com", "password": "wrong"},
-#         headers={"Content-Type": "application/x-www-form-urlencoded"}
-#     )
-#     assert resp.status_code == 401
-#     assert resp.json() == {"detail": "Incorrect email or password."}
+    # 3) Attempt login with bad creds
+    resp = await async_client.post(
+        "/login/",
+        data={"username": "doesnotexist@example.com", "password": "wrong"},
+        headers={"Content-Type": "application/x-www-form-urlencoded"}
+    )
+    assert resp.status_code == 401
+    assert resp.json() == {"detail": "Incorrect email or password."}
 
 # @pytest.mark.asyncio
 # async def test_get_my_profile_returns_current_user(
