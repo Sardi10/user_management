@@ -277,24 +277,24 @@ async def test_get_user_success(
     assert data["linkedin_profile_url"] is None
     assert data["github_profile_url"] is None
 
-    # Enum and boolean fields
+    # Enum and boolean fieldss
     assert data["role"] == user.role.name
     assert data["is_professional"] is False
 
 
-# @pytest.mark.asyncio
-# async def test_update_user_not_found(async_client: AsyncClient, admin_token: str):
-#     """
-#     When updating a non‐existent user, the endpoint should return 404.
-#     Covers the `if not updated_user: raise HTTPException(404)` branch.
-#     """
-#     random_id = uuid4()
-#     headers = {"Authorization": f"Bearer {admin_token}"}
-#     payload = {"first_name": "Foo"}
-#     resp = await async_client.put(f"/users/{random_id}", json=payload, headers=headers)
+@pytest.mark.asyncio
+async def test_update_user_not_found(async_client: AsyncClient, admin_token: str):
+    """
+    When updating a non‐existent user, the endpoint should return 404.
+    Covers the `if not updated_user: raise HTTPException(404)` branch.
+    """
+    random_id = uuid4()
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    payload = {"first_name": "Foo"}
+    resp = await async_client.put(f"/users/{random_id}", json=payload, headers=headers)
 
-#     assert resp.status_code == 404
-#     assert resp.json() == {"detail": "User not found"}
+    assert resp.status_code == 404
+    assert resp.json() == {"detail": "User not found"}
 
 
 # @pytest.mark.asyncio
