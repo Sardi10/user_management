@@ -545,92 +545,92 @@ async def test_upgrade_to_pro_success(db_session: AsyncSession, manager_user, mo
     FakeDatetime = type("FakeDatetime", (), {"utcnow": staticmethod(lambda: fixed_time)})
     monkeypatch.setattr(user_routes, "datetime", FakeDatetime)
 
-#     # Seed a target user with is_professional=False
-#     target = User(
-#         id=uuid4(),
-#         nickname=generate_nickname(),
-#         first_name="T",
-#         last_name="U",
-#         email="target@example.com",
-#         hashed_password=hash_password("pass"),
-#         role=UserRole.AUTHENTICATED,
-#         email_verified=True,
-#         is_locked=False,
-#         is_professional=False
-#     )
-#     db_session.add(target)
-#     await db_session.commit()
+    # Seed a target user with is_professional=False
+    target = User(
+        id=uuid4(),
+        nickname=generate_nickname(),
+        first_name="T",
+        last_name="U",
+        email="target@example.com",
+        hashed_password=hash_password("pass"),
+        role=UserRole.AUTHENTICATED,
+        email_verified=True,
+        is_locked=False,
+        is_professional=False
+    )
+    db_session.add(target)
+    await db_session.commit()
 
-#     # Call the function directly
-#     result = await upgrade_to_pro(target.id, db_session, manager_user)
-#     assert result == {"message": "Upgraded to professional status"}
+    # Call the function directly
+    result = await upgrade_to_pro(target.id, db_session, manager_user)
+    assert result == {"message": "Upgraded to professional status"}
 
-#     # Verify DB changes
-#     refreshed = await db_session.get(User, target.id)
-#     assert refreshed.is_professional is True
-#     assert refreshed.professional_status_updated_at == fixed_time
+    # Verify DB changes
+    refreshed = await db_session.get(User, target.id)
+    assert refreshed.is_professional is True
+    assert refreshed.professional_status_updated_at == fixed_time
 
-# @pytest.mark.asyncio
-# async def test_update_my_profile_direct_no_fields(db_session: AsyncSession, user: User):
-#     """
-#     If no fields are provided, the root_validator should raise ValueError
-#     before entering the function body.
-#     """
-#     # Persist the user so refresh() inside the function can run if body were entered
-#     db_session.add(user)
-#     await db_session.commit()
+@pytest.mark.asyncio
+async def test_update_my_profile_direct_no_fields(db_session: AsyncSession, user: User):
+    """
+    If no fields are provided, the root_validator should raise ValueError
+    before entering the function body.
+    """
+    # Persist the user so refresh() inside the function can run if body were entered
+    db_session.add(user)
+    await db_session.commit()
 
-#     with pytest.raises(ValueError) as exc:
-#         await update_my_profile(UserProfileUpdate(), db_session, user)
-#     assert "At least one field" in str(exc.value)
+    with pytest.raises(ValueError) as exc:
+        await update_my_profile(UserProfileUpdate(), db_session, user)
+    assert "At least one field" in str(exc.value)
 
-# @pytest.mark.asyncio
-# async def test_userprofileupdate_root_validator():
-#     # Constructing with no fields should trigger the root_validator
-#     with pytest.raises(ValueError) as exc:
-#         UserProfileUpdate()  # no fields provided
-#     assert "At least one field" in str(exc.value)
+@pytest.mark.asyncio
+async def test_userprofileupdate_root_validator():
+    # Constructing with no fields should trigger the root_validator
+    with pytest.raises(ValueError) as exc:
+        UserProfileUpdate()  # no fields provided
+    assert "At least one field" in str(exc.value)
 
-# @pytest.mark.asyncio
-# async def test_update_my_profile_direct_success(
-#     db_session: AsyncSession,
-#     manager_user: User,
-#     monkeypatch
-# ):
-#     """
-#     Manager role + valid updates should hit every line:
-#     - loop over fields + setattr
-#     - db.add, commit, refresh
-#     - return current_user
-#     """
-#     # 1) Freeze datetime.utcnow() to a fixed value
-#     fixed_time = datetime(2025, 5, 4, 12, 0, 0)
-#     FakeDT = type("FakeDT", (), {"utcnow": staticmethod(lambda: fixed_time)})
-#     monkeypatch.setattr(user_routes, "datetime", FakeDT)
+@pytest.mark.asyncio
+async def test_update_my_profile_direct_success(
+    db_session: AsyncSession,
+    manager_user: User,
+    monkeypatch
+):
+    """
+    Manager role + valid updates should hit every line:
+    - loop over fields + setattr
+    - db.add, commit, refresh
+    - return current_user
+    """
+    # 1) Freeze datetime.utcnow() to a fixed value
+    fixed_time = datetime(2025, 5, 4, 12, 0, 0)
+    FakeDT = type("FakeDT", (), {"utcnow": staticmethod(lambda: fixed_time)})
+    monkeypatch.setattr(user_routes, "datetime", FakeDT)
 
-#     # 2) Persist the current_user so db.refresh() can operate
-#     db_session.add(manager_user)
-#     await db_session.commit()
+    # 2) Persist the current_user so db.refresh() can operate
+    db_session.add(manager_user)
+    await db_session.commit()
 
-#     # 3) Provide all required fields to the DTO
-#     updates = UserProfileUpdate(
-#         first_name="UpdatedFirst",
-#         last_name=None,
-#         bio="New bio",
-#         profile_picture_url=None,
-#         linkedin_profile_url=None,
-#         github_profile_url=None,
-#     )
+    # 3) Provide all required fields to the DTO
+    updates = UserProfileUpdate(
+        first_name="UpdatedFirst",
+        last_name=None,
+        bio="New bio",
+        profile_picture_url=None,
+        linkedin_profile_url=None,
+        github_profile_url=None,
+    )
 
-#     # 4) Call the function directly
-#     result = await update_my_profile(updates, db_session, manager_user)
+    # 4) Call the function directly
+    result = await update_my_profile(updates, db_session, manager_user)
 
-#     # 5) It should return the same User instance with updated attrs
-#     assert isinstance(result, User)
-#     assert result.first_name == "UpdatedFirst"
-#     assert result.bio == "New bio"
+    # 5) It should return the same User instance with updated attrs
+    assert isinstance(result, User)
+    assert result.first_name == "UpdatedFirst"
+    assert result.bio == "New bio"
 
-#     # 6) Confirm DB was updated and refresh() happened
-#     refreshed = await db_session.get(User, manager_user.id)
-#     assert refreshed.first_name == "UpdatedFirst"
-#     assert refreshed.bio == "New bio"
+    # 6) Confirm DB was updated and refresh() happened
+    refreshed = await db_session.get(User, manager_user.id)
+    assert refreshed.first_name == "UpdatedFirst"
+    assert refreshed.bio == "New bio"
