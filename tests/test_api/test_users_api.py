@@ -364,36 +364,36 @@ async def test_update_user_success(
     assert data["linkedin_profile_url"] is None
     assert data["github_profile_url"] is None
 
-    # 6) Confirm the changes persisted to the databasee
+    # 6) Confirm the changes persisted to the database
     refreshed = await db_session.get(User, user.id)
     assert refreshed.first_name == "NewFirst"
     assert refreshed.last_name == "NewLast"
 
-# @pytest.mark.asyncio
-# async def test_login_locked_account(
-#     async_client: AsyncClient,
-#     db_session: AsyncSession,
-#     monkeypatch
-# ):
-#     """
-#     If the account is locked, login should return 400 with the appropriate detail.
-#     Covers the `if await UserService.is_account_locked(...)` branch.
-#     """
-#     # 1) Patch is_account_locked → True
-#     async def fake_is_locked(session, username):
-#         return True
+@pytest.mark.asyncio
+async def test_login_locked_account(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch
+):
+    """
+    If the account is locked, login should return 400 with the appropriate detail.
+    Covers the `if await UserService.is_account_locked(...)` branch.
+    """
+    # 1) Patch is_account_locked → Truee
+    async def fake_is_locked(session, username):
+        return True
 
-#     monkeypatch.setattr(UserService, "is_account_locked", fake_is_locked)
+    monkeypatch.setattr(UserService, "is_account_locked", fake_is_locked)
 
-#     # 2) Attempt login
-#     resp = await async_client.post(
-#         "/login/",
-#         data={"username": "locked@example.com", "password": "irrelevant"},
-#         headers={"Content-Type": "application/x-www-form-urlencoded"}
-#     )
+    # 2) Attempt login
+    resp = await async_client.post(
+        "/login/",
+        data={"username": "locked@example.com", "password": "irrelevant"},
+        headers={"Content-Type": "application/x-www-form-urlencoded"}
+    )
 
-#     assert resp.status_code == 400
-#     assert resp.json() == {"detail": "Account locked due to too many failed login attempts."}
+    assert resp.status_code == 400
+    assert resp.json() == {"detail": "Account locked due to too many failed login attempts."}
 
 
 # @pytest.mark.asyncio
