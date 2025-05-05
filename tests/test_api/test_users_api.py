@@ -511,7 +511,7 @@ async def test_get_my_profile_returns_current_user(
     assert data["is_professional"] is False
     assert data["professional_status_updated_at"] is None
 
-    # Cleanup
+    # Cleanupp
     app.dependency_overrides.pop(get_current_user)
 
 # @pytest.mark.asyncio
